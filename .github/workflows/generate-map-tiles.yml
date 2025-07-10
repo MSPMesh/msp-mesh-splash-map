@@ -20,6 +20,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install Pillow
+      
+      - name: Create credentials.json
+        env:
+        GDRIVE_CREDENTIALS_DATA: ${{ secrets.GDRIVE_CREDENTIALS_DATA }}
+        run: |
+        echo $GDRIVE_CREDENTIALS_DATA > credentials.json
 
       - name: Run generate_map_tiles.py
         run: python src/generate_map_tiles.py

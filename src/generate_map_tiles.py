@@ -1,4 +1,5 @@
 import os
+import io
 import glob
 import zipfile
 import re
@@ -7,20 +8,72 @@ import json
 from io import BytesIO
 from PIL import Image
 
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+
+google_drive_folder_id = "1hnCj_7EFA-ngb73-jSF8xW2FckdIR4dx"
+
+
+def download_kmz_files():
+    SCOPES = [
+        "https://www.googleapis.com/auth/drive.metadata.readonly",
+        "https://www.googleapis.com/auth/drive.readonly",
+    ]
+    creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+    service = build("drive", "v3", credentials=creds)
+
+    # Call the Drive v3 API
+    results = (
+        service.files()
+        .list(
+            pageSize=100,
+            fields="nextPageToken, files(id, name, mimeType)",
+            q=f"'{google_drive_folder_id}' in parents",
+        )
+        .execute()
+    )
+    items = results.get("files", [])
+
+    if not items:
+        print("No files found.")
+        return
+    print("Files:")
+    os.makedirs("kmz", exist_ok=True)
+    downloaded_files = []
+    for item in items:
+        print(f"{item['name']} ({item['id']})")
+        if item["name"].lower().endswith(".kmz"):
+            file_id = item["id"]
+            file_name = item["name"]
+            request = service.files().get_media(fileId=file_id)
+            fh = io.FileIO(os.path.join("kmz", file_name), "wb")
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
+            print(f"Downloading {file_name}...")
+            while not done:
+                status, done = downloader.next_chunk()
+            print(f"Downloaded {file_name} to kmz/")
+            downloaded_files.append(file_name)
+    return downloaded_files
+
+
 def get_kmz_files():
-    kmz_dir = "src/kmz"
-    kmz_files = glob.glob(os.path.join(kmz_dir, '*.kmz'))
+    kmz_dir = "kmz"
+    kmz_files = glob.glob(os.path.join(kmz_dir, "*.kmz"))
     return kmz_files
+
 
 def find_cloakp_png_in_kmz(kmz_path):
     # Match files like cloakpN44W094.png (cloakp, then anything, then .png)
-    pattern = re.compile(r'^cloakp.*\.png$', re.IGNORECASE)
+    pattern = re.compile(r"^cloakp.*\.png$", re.IGNORECASE)
     found_files = []
-    with zipfile.ZipFile(kmz_path, 'r') as z:
+    with zipfile.ZipFile(kmz_path, "r") as z:
         for name in z.namelist():
             if pattern.match(os.path.basename(name)):
                 found_files.append(name)
     return found_files
+
 
 def collect_cloakp_images_from_kmz_files():
     """
@@ -31,7 +84,7 @@ def collect_cloakp_images_from_kmz_files():
 
     # For each kmz, extract image data for each cloakp image
     for kmz_path in kmz_files:
-        with zipfile.ZipFile(kmz_path, 'r') as z:
+        with zipfile.ZipFile(kmz_path, "r") as z:
             # Find all cloakp image names in this kmz
             cloakp_names = find_cloakp_png_in_kmz(kmz_path)
             # Add new image names to the dict if not already present
@@ -44,12 +97,13 @@ def collect_cloakp_images_from_kmz_files():
                     cloakp_dict[base_name].append(image_data)
     return cloakp_dict
 
+
 def get_color_from_overlapping_pixels(opaque_count):
     color_map = {
-        0: (0, 0, 0, 0), # Transparent
-        1: (255, 0, 0, 255), # Red
-        2: (255, 255, 0, 255), # Yellow
-        3: (0, 255, 0, 255), # Green
+        0: (0, 0, 0, 0),  # Transparent
+        1: (255, 0, 0, 255),  # Red
+        2: (255, 255, 0, 255),  # Yellow
+        3: (0, 255, 0, 255),  # Green
     }
     # Determine color based on count. If it's 0, it remains transparent.
     # If it is more than 0, use the color_map. If count exceeds the map, use the last color.
@@ -74,15 +128,15 @@ def generate_overlap_visualizations(cloakp_dict):
             continue
 
         # Open all images and convert to RGBA
-        imgs = [Image.open(BytesIO(data)).convert('RGBA') for data in img_datas]
+        imgs = [Image.open(BytesIO(data)).convert("RGBA") for data in img_datas]
         width, height = imgs[0].size
 
         # Get alpha channels for all images
-        alphas = [img.getchannel('A') for img in imgs]
+        alphas = [img.getchannel("A") for img in imgs]
         alpha_datas = [list(alpha.getdata()) for alpha in alphas]
 
         # Prepare output image (RGBA)
-        out_img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        out_img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         out_pixels = out_img.load()
 
         for y in range(height):
@@ -98,6 +152,7 @@ def generate_overlap_visualizations(cloakp_dict):
 
     return result_images
 
+
 def save_visualizations(result_images):
     """
     Saves the generated images to the 'visualizations' directory.
@@ -108,15 +163,26 @@ def save_visualizations(result_images):
     for img_name, img in result_images.items():
         img.save(os.path.join("map_data", img_name.replace("cloakp", "")), format="PNG")
 
+
 def main():
+    # Download KMZ files from Google Drive
+    print("Downloading KMZ files from Google Drive...")
+    downloaded_files = download_kmz_files()
+    if not downloaded_files:
+        print("No KMZ files downloaded.")
+        return
+    print(f"Downloaded {len(downloaded_files)} KMZ files.")
     cloakp_dict = collect_cloakp_images_from_kmz_files()
     if not cloakp_dict:
         print("No cloakp images found in KMZ files.")
         return
 
+    print("Generating visualizations for overlapping cloakp images...")
     result_images = generate_overlap_visualizations(cloakp_dict)
     save_visualizations(result_images)
-    print(f"Generated {len(result_images)} visualizations and saved to 'map_data' directory.")
+    print(
+        f"Generated {len(result_images)} visualizations and saved to 'map_data' directory."
+    )
 
     # Save list of PNG filenames to JSON
     png_names = [img_name.replace("cloakp", "") for img_name in result_images.keys()]
@@ -124,6 +190,7 @@ def main():
     with open(json_path, "w") as f:
         json.dump(png_names, f)
     print(f"Saved list of PNG filenames to '{json_path}'.")
+
 
 if __name__ == "__main__":
     main()
