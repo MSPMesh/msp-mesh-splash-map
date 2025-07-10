@@ -44,12 +44,23 @@ def collect_cloakp_images_from_kmz_files():
                     cloakp_dict[base_name].append(image_data)
     return cloakp_dict
 
-color_map = {
-    0: (0, 0, 0, 0), # Transparent
-    1: (255, 0, 0, 255), # Red
-    2: (255, 255, 0, 255), # Yellow
-    3: (0, 255, 0, 255), # Green
-}
+def get_color_from_overlapping_pixels(opaque_count):
+    color_map = {
+        0: (0, 0, 0, 0), # Transparent
+        1: (255, 0, 0, 255), # Red
+        2: (255, 255, 0, 255), # Yellow
+        3: (0, 255, 0, 255), # Green
+    }
+    # Determine color based on count. If it's 0, it remains transparent.
+    # If it is more than 0, use the color_map. If count exceeds the map, use the last color.
+    if opaque_count == 0:
+        return color_map[0]
+    else:
+        color_idx = opaque_count if opaque_count in color_map else max(color_map.keys())
+        if opaque_count > max(color_map.keys()):
+            color_idx = max(color_map.keys())
+        return color_map[color_idx]
+
 
 def generate_overlap_visualizations(cloakp_dict):
     """
@@ -79,15 +90,9 @@ def generate_overlap_visualizations(cloakp_dict):
                 idx = y * width + x
                 # Count how many images have opaque pixel at this location
                 opaque_count = sum(alpha_data[idx] == 255 for alpha_data in alpha_datas)
-                # Determine color based on count. If it's 0, it remains transparent.
-                # If it is more than 0, use the color_map. If count exceeds the map, use the last color.
-                if opaque_count == 0:
-                    out_pixels[x, y] = color_map[0]
-                else:
-                    color_idx = opaque_count if opaque_count in color_map else max(color_map.keys())
-                    if opaque_count > max(color_map.keys()):
-                        color_idx = max(color_map.keys())
-                    out_pixels[x, y] = color_map[color_idx]
+                # Get the color for this pixel based on the count
+                color = get_color_from_overlapping_pixels(opaque_count)
+                out_pixels[x, y] = color
 
         result_images[img_name] = out_img
 
