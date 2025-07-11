@@ -5,6 +5,8 @@ import zipfile
 import re
 import json
 
+import concurrent.futures
+
 from io import BytesIO
 from PIL import Image
 
@@ -23,7 +25,6 @@ def download_kmz_files():
     creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     service = build("drive", "v3", credentials=creds)
 
-    # Call the Drive v3 API
     results = (
         service.files()
         .list(
@@ -38,23 +39,32 @@ def download_kmz_files():
     if not items:
         print("No files found.")
         return
-    print("Files:")
     os.makedirs("kmz", exist_ok=True)
     downloaded_files = []
-    for item in items:
-        print(f"{item['name']} ({item['id']})")
+
+    def download_file(item):
         if item["name"].lower().endswith(".kmz"):
             file_id = item["id"]
             file_name = item["name"]
+            file_path = os.path.join("kmz", file_name)
+            if os.path.exists(file_path):
+                print(f"{file_name} already exists, skipping.")
+                return file_name
             request = service.files().get_media(fileId=file_id)
-            fh = io.FileIO(os.path.join("kmz", file_name), "wb")
+            fh = io.FileIO(file_path, "wb")
             downloader = MediaIoBaseDownload(fh, request)
             done = False
             print(f"Downloading {file_name}...")
             while not done:
                 status, done = downloader.next_chunk()
             print(f"Downloaded {file_name} to kmz/")
-            downloaded_files.append(file_name)
+            return file_name
+        return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        results = list(executor.map(download_file, items))
+        downloaded_files = [r for r in results if r]
+
     return downloaded_files
 
 
@@ -118,15 +128,16 @@ def collect_cloakp_images_from_kmz_files():
 
 def get_color_from_overlapping_pixels(opaque_count):
     base_color = (255, 0, 0, 0)
-    max_opaque_count = 7
+    max_opaque_count = 10
     if opaque_count == 0:
         return (0, 0, 0, 0)  # Transparent
-    elif opaque_count > max_opaque_count:
-        return (255, 255, 255, 255)  # White for more than max count
-    else:
-        # Generate a color based on the count
-        alpha = int(255 * (opaque_count / max_opaque_count))
-        return (base_color[0], base_color[1], base_color[2], alpha)
+
+    # Generate a color based on the count
+    alpha = int(255 * (opaque_count / max_opaque_count))
+    # Ensure alpha is between 0 and 255
+    alpha = max(0, min(255, alpha))
+    # Return the base color with the calculated alpha
+    return (base_color[0], base_color[1], base_color[2], alpha)
 
 
 def generate_overlap_visualizations(cloakp_dict):
