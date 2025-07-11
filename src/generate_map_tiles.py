@@ -5,8 +5,6 @@ import zipfile
 import re
 import json
 
-import concurrent.futures
-
 from io import BytesIO
 from PIL import Image
 
@@ -61,9 +59,11 @@ def download_kmz_files():
             return file_name
         return None
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        results = list(executor.map(download_file, items))
-        downloaded_files = [r for r in results if r]
+    # Remove concurrent.futures usage, use a simple for loop
+    for item in items:
+        result = download_file(item)
+        if result:
+            downloaded_files.append(result)
 
     return downloaded_files
 
