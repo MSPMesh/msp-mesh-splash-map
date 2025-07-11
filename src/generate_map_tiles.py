@@ -8,11 +8,11 @@ import xml.etree.ElementTree as ET
 
 from io import BytesIO
 from PIL import Image
+from random import random
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from shortuuid import random
 
 google_drive_folder_id = "1hnCj_7EFA-ngb73-jSF8xW2FckdIR4dx"
 
@@ -237,11 +237,12 @@ def anonymize_node_positions(node_positions):
     Anonymizes the node positions offsetting the latitude and longitude by a small random value.
     """
     anonymized_positions = []
-    for lat, lon in node_positions:
+    for node in node_positions:
         # Offset by a small random value
-        lat += random.uniform(-0.005, 0.005)
-        lon += random.uniform(-0.005, 0.005)
-        anonymized_positions.append((lat, lon))
+        anon_node = dict(node)
+        anon_node["lat"] += random() * 0.01 - 0.005
+        anon_node["long"] += random() * 0.01 - 0.005
+        anonymized_positions.append(anon_node)
     return anonymized_positions
 
 
