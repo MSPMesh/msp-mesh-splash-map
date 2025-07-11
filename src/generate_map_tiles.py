@@ -98,22 +98,35 @@ def collect_cloakp_images_from_kmz_files():
     return cloakp_dict
 
 
+# def get_color_from_overlapping_pixels(opaque_count):
+#     color_map = {
+#         0: (0, 0, 0, 0),  # Transparent
+#         1: (255, 0, 0, 255),  # Red
+#         2: (255, 255, 0, 255),  # Yellow
+#         3: (0, 255, 0, 255),  # Green
+#     }
+#     # Determine color based on count. If it's 0, it remains transparent.
+#     # If it is more than 0, use the color_map. If count exceeds the map, use the last color.
+#     if opaque_count == 0:
+#         return color_map[0]
+#     else:
+#         color_idx = opaque_count if opaque_count in color_map else max(color_map.keys())
+#         if opaque_count > max(color_map.keys()):
+#             color_idx = max(color_map.keys())
+#         return color_map[color_idx]
+
+
 def get_color_from_overlapping_pixels(opaque_count):
-    color_map = {
-        0: (0, 0, 0, 0),  # Transparent
-        1: (255, 0, 0, 255),  # Red
-        2: (255, 255, 0, 255),  # Yellow
-        3: (0, 255, 0, 255),  # Green
-    }
-    # Determine color based on count. If it's 0, it remains transparent.
-    # If it is more than 0, use the color_map. If count exceeds the map, use the last color.
+    base_color = (255, 0, 0, 0)
+    max_opaque_count = 7
     if opaque_count == 0:
-        return color_map[0]
+        return (0, 0, 0, 0)  # Transparent
+    elif opaque_count > max_opaque_count:
+        return (255, 255, 255, 255)  # White for more than max count
     else:
-        color_idx = opaque_count if opaque_count in color_map else max(color_map.keys())
-        if opaque_count > max(color_map.keys()):
-            color_idx = max(color_map.keys())
-        return color_map[color_idx]
+        # Generate a color based on the count
+        alpha = int(255 * (opaque_count / max_opaque_count))
+        return (base_color[0], base_color[1], base_color[2], alpha)
 
 
 def generate_overlap_visualizations(cloakp_dict):
