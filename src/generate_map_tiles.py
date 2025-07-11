@@ -152,24 +152,6 @@ def collect_data_from_kmz_files():
     return cloakp_dict, node_positions
 
 
-# def get_color_from_overlapping_pixels(opaque_count):
-#     color_map = {
-#         0: (0, 0, 0, 0),  # Transparent
-#         1: (255, 0, 0, 255),  # Red
-#         2: (255, 255, 0, 255),  # Yellow
-#         3: (0, 255, 0, 255),  # Green
-#     }
-#     # Determine color based on count. If it's 0, it remains transparent.
-#     # If it is more than 0, use the color_map. If count exceeds the map, use the last color.
-#     if opaque_count == 0:
-#         return color_map[0]
-#     else:
-#         color_idx = opaque_count if opaque_count in color_map else max(color_map.keys())
-#         if opaque_count > max(color_map.keys()):
-#             color_idx = max(color_map.keys())
-#         return color_map[color_idx]
-
-
 def get_color_from_overlapping_pixels(opaque_count):
     base_color = (255, 0, 0, 0)
     max_opaque_count = 10
@@ -232,20 +214,6 @@ def save_visualizations(result_images):
         img.save(os.path.join("map_data", img_name.replace("cloakp", "")), format="PNG")
 
 
-def anonymize_node_positions(node_positions):
-    """
-    Anonymizes the node positions offsetting the latitude and longitude by a small random value.
-    """
-    anonymized_positions = []
-    for node in node_positions:
-        # Offset by a small random value
-        anon_node = dict(node)
-        anon_node["lat"] += random() * 0.01 - 0.005
-        anon_node["long"] += random() * 0.01 - 0.005
-        anonymized_positions.append(anon_node)
-    return anonymized_positions
-
-
 def main():
     # Download KMZ files from Google Drive
     print("Downloading KMZ files from Google Drive...")
@@ -255,7 +223,7 @@ def main():
         return
     print(f"Downloaded {len(downloaded_files)} KMZ files.")
     cloakp_dict, node_positions = collect_data_from_kmz_files()
-    node_positions = anonymize_node_positions(node_positions)
+
     if not cloakp_dict:
         print("No cloakp images found in KMZ files.")
         return
@@ -274,12 +242,44 @@ def main():
         json.dump(png_names, f)
     print(f"Saved list of PNG filenames to '{json_path}'.")
 
+    # Uncomment the following lines if you want to save node positions to JSON
     # Save node_positions to JSON
-    node_json_path = os.path.join("map_data", "nodes.json")
-    with open(node_json_path, "w") as f:
-        json.dump(node_positions, f)
-    print(f"Saved node positions to '{node_json_path}'.")
+    # node_json_path = os.path.join("map_data", "nodes.json")
+    # with open(node_json_path, "w") as f:
+    #     json.dump(node_positions, f)
+    # print(f"Saved node positions to '{node_json_path}'.")
 
 
 if __name__ == "__main__":
     main()
+
+
+# def anonymize_node_positions(node_positions):
+#     """
+#     Anonymizes the node positions offsetting the latitude and longitude by a small random value.
+#     """
+#     anonymized_positions = []
+#     for node in node_positions:
+#         # Offset by a small random value
+#         anon_node = dict(node)
+#         anon_node["lat"] += random() * 0.01 - 0.005
+#         anon_node["long"] += random() * 0.01 - 0.005
+#         anonymized_positions.append(anon_node)
+#     return anonymized_positions
+
+# def get_color_from_overlapping_pixels(opaque_count):
+#     color_map = {
+#         0: (0, 0, 0, 0),  # Transparent
+#         1: (255, 0, 0, 255),  # Red
+#         2: (255, 255, 0, 255),  # Yellow
+#         3: (0, 255, 0, 255),  # Green
+#     }
+#     # Determine color based on count. If it's 0, it remains transparent.
+#     # If it is more than 0, use the color_map. If count exceeds the map, use the last color.
+#     if opaque_count == 0:
+#         return color_map[0]
+#     else:
+#         color_idx = opaque_count if opaque_count in color_map else max(color_map.keys())
+#         if opaque_count > max(color_map.keys()):
+#             color_idx = max(color_map.keys())
+#         return color_map[color_idx]
