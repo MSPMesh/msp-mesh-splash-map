@@ -4,6 +4,7 @@ import glob
 import zipfile
 import re
 import json
+import xml.etree.ElementTree as ET
 
 from io import BytesIO
 from PIL import Image
@@ -11,6 +12,7 @@ from PIL import Image
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from shortuuid import random
 
 google_drive_folder_id = "1hnCj_7EFA-ngb73-jSF8xW2FckdIR4dx"
 
@@ -45,17 +47,18 @@ def download_kmz_files():
             file_id = item["id"]
             file_name = item["name"]
             file_path = os.path.join("kmz", file_name)
+            print(f"Downloading {file_name}... ", end="")
             if os.path.exists(file_path):
-                print(f"{file_name} already exists, skipping.")
+                print(f"file already exists, skipping.")
                 return file_name
             request = service.files().get_media(fileId=file_id)
             fh = io.FileIO(file_path, "wb")
             downloader = MediaIoBaseDownload(fh, request)
             done = False
-            print(f"Downloading {file_name}...")
+
             while not done:
                 status, done = downloader.next_chunk()
-            print(f"Downloaded {file_name} to kmz/")
+            print(f"Done")
             return file_name
         return None
 
@@ -85,19 +88,20 @@ def find_cloakp_png_in_kmz(kmz_path):
     return found_files
 
 
-def collect_cloakp_images_from_kmz_files():
+def collect_data_from_kmz_files():
     """
-    Returns a dictionary: {cloakp file name: [image data from each kmz]}
+    Returns a tuple:
+      - cloakp_dict: {cloakp file name: [image data from each kmz]}
+      - node_positions: [{name, lat, long, alt} for each kmz]
     """
     kmz_files = get_kmz_files()
     cloakp_dict = {}
+    node_positions = []
 
-    # For each kmz, extract image data for each cloakp image
     for kmz_path in kmz_files:
         with zipfile.ZipFile(kmz_path, "r") as z:
             # Find all cloakp image names in this kmz
             cloakp_names = find_cloakp_png_in_kmz(kmz_path)
-            # Add new image names to the dict if not already present
             for name in cloakp_names:
                 base_name = os.path.basename(name)
                 if base_name not in cloakp_dict:
@@ -105,7 +109,47 @@ def collect_cloakp_images_from_kmz_files():
                 with z.open(name) as img_file:
                     image_data = img_file.read()
                     cloakp_dict[base_name].append(image_data)
-    return cloakp_dict
+
+            # Find the KML file (endswith .kml)
+            kml_names = [n for n in z.namelist() if n.lower().endswith(".kml")]
+            if kml_names:
+                with z.open(kml_names[0]) as kml_file:
+                    kml_data = kml_file.read()
+                    # Parse KML XML
+                    try:
+                        root = ET.fromstring(kml_data)
+                        ns = {"kml": "http://earth.google.com/kml/2.1"}
+                        # Find Placemark with <Snippet>position of viewer</Snippet>
+                        placemarks = root.findall(".//kml:Placemark", ns)
+                        for pm in placemarks:
+                            snippet = pm.find("kml:Snippet", ns)
+                            if (
+                                snippet is not None
+                                and snippet.text == "position of viewer"
+                            ):
+                                name_elem = pm.find("kml:name", ns)
+                                point = pm.find("kml:Point", ns)
+                                coords_elem = (
+                                    point.find("kml:coordinates", ns)
+                                    if point is not None
+                                    else None
+                                )
+                                if name_elem is not None and coords_elem is not None:
+                                    coords = coords_elem.text.strip().split(",")
+                                    if len(coords) >= 3:
+                                        node_positions.append(
+                                            {
+                                                "name": name_elem.text,
+                                                "lat": float(coords[1]),
+                                                "long": float(coords[0]),
+                                                "alt": float(coords[2]),
+                                            }
+                                        )
+                                break
+                    except Exception as e:
+                        print(f"Error parsing KML in {kmz_path}: {e}")
+
+    return cloakp_dict, node_positions
 
 
 # def get_color_from_overlapping_pixels(opaque_count):
@@ -188,6 +232,19 @@ def save_visualizations(result_images):
         img.save(os.path.join("map_data", img_name.replace("cloakp", "")), format="PNG")
 
 
+def anonymize_node_positions(node_positions):
+    """
+    Anonymizes the node positions offsetting the latitude and longitude by a small random value.
+    """
+    anonymized_positions = []
+    for lat, lon in node_positions:
+        # Offset by a small random value
+        lat += random.uniform(-0.005, 0.005)
+        lon += random.uniform(-0.005, 0.005)
+        anonymized_positions.append((lat, lon))
+    return anonymized_positions
+
+
 def main():
     # Download KMZ files from Google Drive
     print("Downloading KMZ files from Google Drive...")
@@ -196,7 +253,8 @@ def main():
         print("No KMZ files downloaded.")
         return
     print(f"Downloaded {len(downloaded_files)} KMZ files.")
-    cloakp_dict = collect_cloakp_images_from_kmz_files()
+    cloakp_dict, node_positions = collect_data_from_kmz_files()
+    node_positions = anonymize_node_positions(node_positions)
     if not cloakp_dict:
         print("No cloakp images found in KMZ files.")
         return
@@ -214,6 +272,12 @@ def main():
     with open(json_path, "w") as f:
         json.dump(png_names, f)
     print(f"Saved list of PNG filenames to '{json_path}'.")
+
+    # Save node_positions to JSON
+    node_json_path = os.path.join("map_data", "nodes.json")
+    with open(node_json_path, "w") as f:
+        json.dump(node_positions, f)
+    print(f"Saved node positions to '{node_json_path}'.")
 
 
 if __name__ == "__main__":
