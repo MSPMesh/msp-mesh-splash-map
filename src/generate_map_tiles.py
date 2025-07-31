@@ -14,7 +14,8 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-google_drive_folder_id = "1hnCj_7EFA-ngb73-jSF8xW2FckdIR4dx"
+personal_google_drive_folder_id = "1hnCj_7EFA-ngb73-jSF8xW2FckdIR4dx"
+google_drive_folder_id = "1DffCUhUklyg1DQs9Fl0PLDU-dVrH0CQL"
 
 
 def download_kmz_files():
@@ -242,30 +243,10 @@ def main():
         json.dump(png_names, f)
     print(f"Saved list of PNG filenames to '{json_path}'.")
 
-    # Uncomment the following lines if you want to save node positions to JSON
-    # Save node_positions to JSON
-    # node_json_path = os.path.join("map_data", "nodes.json")
-    # with open(node_json_path, "w") as f:
-    #     json.dump(node_positions, f)
-    # print(f"Saved node positions to '{node_json_path}'.")
-
 
 if __name__ == "__main__":
     main()
 
-
-# def anonymize_node_positions(node_positions):
-#     """
-#     Anonymizes the node positions offsetting the latitude and longitude by a small random value.
-#     """
-#     anonymized_positions = []
-#     for node in node_positions:
-#         # Offset by a small random value
-#         anon_node = dict(node)
-#         anon_node["lat"] += random() * 0.01 - 0.005
-#         anon_node["long"] += random() * 0.01 - 0.005
-#         anonymized_positions.append(anon_node)
-#     return anonymized_positions
 
 # def get_color_from_overlapping_pixels(opaque_count):
 #     color_map = {
